@@ -9,7 +9,7 @@
 
 -record(reader,  {id    = [] :: term(), % phone_id | {p2p,_,_} | {muc,_,_}
                   pos   = 0 :: [] | integer(),
-                  cache = [] :: [] | integer(),
+                  cache = [] :: [] | integer() | {atom(),term()},
                   args  = [] :: term(),
                   feed  = [] :: term(), % {p2p,_,_} | {muc,_} -- link to writer
                   dir   =  0 :: 0 | 1}).
@@ -48,7 +48,7 @@
 -record(block,     {left,right,name,last}).
 -record(log,       {?CONTAINER, name, acc}).
 -record(operation, {?ITERATOR(log), body=[], name=[], status=[]}).
--record(kvs,       {mod,cx}).
+-record(kvs,       {mod = store_mnesia,cx}).
 
 -compile({no_auto_import,[put/2]}).
 

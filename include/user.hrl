@@ -2,6 +2,7 @@
 -define(USER_HRL, true).
 -include("kvs.hrl").
 -record(user, {?ITERATOR(feed),
+        email=[]::[]|binary(),
         username=[],
         password=[],
         display_name=[],
@@ -15,11 +16,6 @@
         date=[],
         status=[],
         zone=[],
-        type=[] }).
--record(user2, {?ITER, % version 2
-        mail=[]::[]|binary(),
-        name=[]::[]|binary(),
-        pass=[]::[]|binary(),
-        zone=[]::[]|binary(),
-        type=[]::[]|atom() }).
+        type=[],
+        new_field }).
 -endif.

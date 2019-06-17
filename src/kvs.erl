@@ -65,14 +65,14 @@ stop(#kvs{mod=DBA}) -> DBA:stop().
 change_storage(Type) -> [ change_storage(Name,Type) || #table{name=Name} <- kvs:tables() ].
 change_storage(Table,Type,#kvs{mod=DBA}) -> DBA:change_storage(Table,Type).
 destroy(#kvs{mod=DBA}) -> DBA:destroy().
-join(Node,#kvs{mod=DBA}) -> DBA:join(Node), rotate_new(), load_partitions(), load_config().
+join(Node,#kvs{mod=DBA}) -> R = DBA:join(Node), rotate_new(), load_partitions(), {R,load_config()}.
 version(#kvs{mod=DBA}) -> DBA:version().
 tables() -> lists:flatten([ (M:metainfo())#schema.tables || M <- modules() ]).
 table(Name) when is_atom(Name) -> lists:keyfind(rname(Name),#table.name,tables());
 table(_) -> false.
 dir(#kvs{mod=DBA}) -> DBA:dir().
 info(T,#kvs{mod=DBA}) -> DBA:info(T).
-modules() -> kvs:config(schema).
+modules() -> application:get_env(kvs,schema,[kvs_user, kvs_acl, kvs_feed, kvs_subscription ]).
 containers() ->
     lists:flatten([ [ {T#table.name,T#table.fields}
         || T=#table{container=true} <- (M:metainfo())#schema.tables ]
@@ -108,7 +108,7 @@ ensure_link(Record, #kvs{mod=_Store}=Driver) ->
             NC1 = list_to_tuple([CName | lists:map(fun(_) -> [] end,Fields)]),
             NC2 = setelement(#container.id, NC1, Cid),
             NC3 = setelement(#container.rear, NC2, Id),
-            NC4 = setelement(#container.count, NC3, 0);
+            setelement(#container.count, NC3, 0);
         _Error -> error end,
 
     case Container of
@@ -132,11 +132,7 @@ ensure_link(Record, #kvs{mod=_Store}=Driver) ->
                 C2 = setelement(#container.top, Container, Id),
                 C3 = setelement(#container.count, C2, element(#container.count, Container)+1),
 
-                R  = setelement(#iterator.feeds, Record,
-                    [ case F1 of
-                        {FN, Fd} -> {FN, Fd};
-                        _-> {F1, kvs:create(CName,{F1,element(#iterator.id,Record)},Driver)}
-                      end || F1 <- element(#iterator.feeds, Record)]),
+                R  = Record,
 
                 R1 = setelement(#iterator.next,    R,  Next),
                 R2 = setelement(#iterator.prev,    R1, Prev),
@@ -160,7 +156,7 @@ link(Record,#kvs{mod=_Store}=Driver) ->
         {error, not_found} -> {error, not_found} end.
 
 %add(Record, #kvs{mod=store_mnesia}=Driver) when is_tuple(Record) -> store_mnesia:add(Record);
-add(Record, #kvs{mod=Store}=Driver) when is_tuple(Record) -> append(Record,Driver).
+add(Record, #kvs{}=Driver) when is_tuple(Record) -> append(Record,Driver).
 
 append(Record, #kvs{mod=_Store}=Driver) when is_tuple(Record) ->
     Id = element(#iterator.id, Record),
@@ -212,15 +208,15 @@ delete(Tab, Key, #kvs{mod=Mod}) ->
          [] -> Mod:delete(Tab, Key);
           T -> Mod:delete(T, Key) end.
 
-remove(Record, Id,#kvs{mod=store_mnesia}=Driver) -> store_mnesia:remove(Record,Id);
-remove(Record, Id,#kvs{mod=Store}=Driver) -> takeoff(Record,Id,Driver).
+remove(Record, Id,#kvs{mod=store_mnesia}) -> store_mnesia:remove(Record,Id);
+remove(Record, Id,#kvs{}=Driver) -> takeoff(Record,Id,Driver).
 
-takeoff(Record,Id,#kvs{mod=Mod}=Driver) ->
+takeoff(Record,Id,#kvs{}=Driver) ->
     case get(Record,Id) of
          {error, not_found} -> kvs:error(?MODULE,"Can't remove ~p~n",[{Record,Id}]);
                      {ok,R} -> do_remove(R,Driver) end.
 
-do_remove(E,#kvs{mod=Mod}=Driver) ->
+do_remove(E,#kvs{}=Driver) ->
     case get(element(#iterator.container,E),element(#iterator.feed_id,E)) of
          {ok, C} -> unlink(C,E,Driver);
                _ -> skip end,
@@ -237,7 +233,7 @@ fold(Fun,Acc,Table,Start,Count,Direction,Driver) ->
          {ok, R} -> Prev = element(Direction, R),
                     Count1 = case Count of C when is_integer(C) -> C - 1; _-> Count end,
                     fold(Fun, Fun(R,Acc), Table, Prev, Count1, Direction, Driver);
-           Error -> %kvs:error(?MODULE,"Error: ~p~n",[Error]),
+           _Error -> %kvs:error(?MODULE,"Error: ~p~n",[Error]),
                     Acc end catch _:_ -> Acc end.
 
 entries({error,_},_,_,_)      -> [];
@@ -273,6 +269,7 @@ all(Tab,#kvs{mod=DBA}) ->
     lists:flatten([ rnorm(rname(Tab),DBA:all(T)) || T <- rlist(Tab) ]).
 index(Tab, Key, Value,#kvs{mod=DBA}) ->
     lists:flatten([ rnorm(rname(Tab),DBA:index(T, Key, Value)) || T <- rlist(Tab) ]).
+next_id(Tab, Incr, KVX) when is_list(Tab) -> next_id(list_to_atom(Tab), Incr, KVX);
 next_id(Tab, Incr,#kvs{mod=DBA}) ->
     DBA:next_id(case table(Tab) of #table{} -> atom_to_list(Tab); _ -> Tab end, Incr).
 
@@ -345,13 +342,14 @@ find([Range|T],RecordName,Id) ->
           [] -> find(T,RecordName,Id);
           Range -> Range end.
 
-lookup(#block{left=Left,right=Right,name=Name}=I,Id) when Id =< Right, Id >= Left -> I;
+lookup(#block{left=Left,right=Right}=I,Id) when Id =< Right, Id >= Left -> I;
 lookup(#block{},_) -> [].
 
 rotate_new() ->
     N = [ kvs:rotate(kvs:table(T)) || {T,_} <- fold_tables(),
         length(proplists:get_value(attributes,info(last_disc(T)),[])) /= length((table(rname(T)))#table.fields) ],
-    io:format("Nonexistent: ~p~n",[N]), N.
+    %io:format("Nonexistent: ~p~n",[N]),
+    N.
 rotate(#table{name=N}) ->
     R = name(rname(N)),
     init(setelement(#table.name,kvs:table(kvs:last_table(N)),R)),
@@ -369,7 +367,7 @@ rotate(Table) ->
 load_partitions()  ->
     [ case kvs:get(config,Table) of
         {ok,{config,_,List}} -> application:set_env(kvs,Table,List);
-        Else -> ok end || {table,Table} <- kvs:dir() ].
+        _Else -> ok end || {table,Table} <- kvs:dir() ].
 
 rnorm(Tag,List) -> [ setelement(1,R,Tag) || R <- List ].
 rlist(Table)   -> [ N || #block{name=N} <- kvs:config(Table) ]++[Table].

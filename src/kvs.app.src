@@ -1,7 +1,7 @@
 {application, kvs,
-   [{description, "KVS Abstract Term Database"},
-    {vsn, "5.10"},
+   [{description, "KVS Abstract Chain Database"},
+    {vsn, "9.4.1"},
     {registered, []},
-    {applications, [kernel,stdlib,mnesia]},
-    {mod, { kvs_app, []}},
+    {applications, [kernel,stdlib]},
+    {mod, { kvs, []}},
     {env, []} ]}.

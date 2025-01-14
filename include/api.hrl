@@ -1,62 +1,21 @@
 -ifndef(API_HRL).
 -define(API_HRL, true).
-
+-define(API,[start/0,stop/0,leave/0,leave/1,destroy/0,destroy/1,
+             join/0,join/1,modules/0,cursors/0,get/2,get/3,put/1,put/2,index/3,index/4,
+             match/1,match/2,index_match/2,index_match/3,key_match/2,key_match/3,
+             delete/2,delete/3,delete_range/3,
+             table/1,tables/0,dir/0,initialize/2,seq/2,all/1,all/2,count/1,ver/0]).
 -include("metainfo.hrl").
-
-% exports
-
--export([start/0,stop/0]).                                        % service
--export([destroy/0,join/0,join/1,init/2]).                        % schema change
--export([modules/0,containers/0,tables/0,table/1,version/0]).     % meta info
--export([create/1,add/1,link/1,unlink/1,remove/2]).               % chain ops
--export([put/1,delete/2,next_id/2]).                              % raw ops
--export([get/2,get/3,index/3]).                                   % read ops
--export([load_db/1,save_db/1]).                                   % import/export
-
-
-% service
-
--spec start() -> ok | {error,any()}.
--spec stop() -> stopped.
-
-% schema change
-
+-spec seq(atom() | [], integer() | []) -> term().
+-spec count(atom()) -> integer().
+-spec dir() -> list({'table',atom()}).
+-spec ver() -> {'version',string()}.
+-spec leave() -> ok.
 -spec destroy() -> ok.
 -spec join() -> ok | {error,any()}.
 -spec join(Node :: string()) -> [{atom(),any()}].
--spec init(Backend :: atom(), Module :: atom()) -> list(#table{}).
-
-% meta info
-
 -spec modules() -> list(atom()).
--spec containers() -> list({atom(),list(atom())}).
+-spec cursors() -> list({atom(),list(atom())}).
 -spec tables() -> list(#table{}).
--spec table(Tab :: atom()) -> #table{}.
--spec version() -> {version,string()}.
-
-% chain ops
-
--spec create(Container :: atom()) -> integer().
--spec add(Record :: tuple()) -> {ok,tuple()} | {error,exist} | {error,no_container} | {error,just_added} | {aborted,any()}.
--spec link(Record :: tuple()) -> {ok,tuple()} | {error, not_found} | {error,no_container} | {error,just_added}.
--spec unlink(Record :: tuple()) -> {ok,tuple()} | {error,no_container}.
--spec remove(Tab :: atom(), Key :: any()) -> ok | {error,any()}.
-
-% raw ops
-
--spec put(Record :: tuple()) -> ok | {error,any()}.
--spec delete(Tab :: atom(), Key :: any()) -> ok | {error,any()}.
-
-% read ops
-
--spec get(Tab :: atom(), Key :: any()) -> {ok,any()} | {error,duplicated} | {error,not_found}.
--spec get(Tab :: atom(), Key :: any(), Value :: any()) -> {ok,any()} | {error,duplicated} | {error,not_found}.
--spec index(Tab :: atom(), Key :: any(), Value :: any()) -> list(tuple()).
--spec next_id(Tab :: atom() | string(), Key :: any()) -> integer().
-
-% import/export
-
--spec load_db(Path :: string()) -> list(ok | {error,any()}).
--spec save_db(Path :: string()) -> ok | {error,any()}.
-
+-spec table(Tab :: atom()) -> #table{} | false.
 -endif.
